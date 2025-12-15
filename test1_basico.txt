@@ -1,0 +1,7 @@
+; Público 1 - Básico com memória
+LDF F1, [50]
+LDF F2, [51]
+LDF F3, [52]
+ADDF F4, F1, F2
+MULF F5, F4, F3
+SDF F5, [53]

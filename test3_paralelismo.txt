@@ -1,0 +1,9 @@
+; Público 3 - Paralelismo possível
+LDF F1, [100]
+LDF F2, [101]
+LDF F3, [102]
+LDF F4, [103]
+ADDF F5, F1, F2
+MULF F6, F3, F4
+ADDF F7, F5, F6
+SDF F7, [104]

@@ -1,0 +1,8 @@
+; Público 2 - Dependências encadeadas
+LDF F1, [75]
+LDF F2, [76]
+ADDF F3, F1, F2
+MULF F4, F3, F1
+SUBF F5, F4, F2
+DIVF F6, F5, F1
+SDF F6, [77]
