@@ -230,20 +230,11 @@ class TomasuloSimulator:
 
             if rs.op == 'SDF':
                 self.memory[rs.a] = rs.vj
-            elif rs.op == 'LDF':
-                for instr in self.instructions:
-                    if instr.rs == rs.name:
-                        self.registers[instr.dest] = rs.result
-                        if self.register_status[instr.dest] == rs.name:
-                            self.register_status[instr.dest] = None
-                        break
             else:
-                for instr in self.instructions:
-                    if instr.rs == rs.name:
-                        self.registers[instr.dest] = rs.result
-                        if self.register_status[instr.dest] == rs.name:
-                            self.register_status[instr.dest] = None
-                        break
+                dest_reg = found_instr.dest
+                self.registers[dest_reg] = rs.result
+                if self.register_status[dest_reg] == rs.name:
+                    self.register_status[dest_reg] = None
 
             for other_rs in all_rs:
                 if other_rs.qj == rs.name:
