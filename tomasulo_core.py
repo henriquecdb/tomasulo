@@ -11,6 +11,7 @@ LATENCIAS = {
 class ReservationStation:
     def __init__(self, name, op_type):
         self.name = name
+        self.op_type = op_type
         self.busy = False
         self.op = None
         self.vj = None
@@ -20,7 +21,7 @@ class ReservationStation:
         self.a = None
         self.result = None
         self.cycles_left = 0
-        self.op_type = op_type
+        self.instr_index = None
 
     def clear(self):
         self.busy = False
@@ -32,6 +33,7 @@ class ReservationStation:
         self.a = None
         self.result = None
         self.cycles_left = 0
+        self.instr_index = None
 
 
 class Instruction:
@@ -41,8 +43,7 @@ class Instruction:
         self.dest = parts[1]
 
         if self.op in ['LDF', 'SDF']:
-            addr_str = parts[2].strip('[]')
-            self.addr = int(addr_str)
+            self.addr = int(parts[2].strip('[]'))
             self.src1 = None
             self.src2 = None
         else:
@@ -67,12 +68,9 @@ class TomasuloSimulator:
         self.cycle = 0
         self.initial_memory = {}
 
-        self.rs_add = [ReservationStation(
-            f'Add{i + 1}', 'add') for i in range(3)]
-        self.rs_mul = [ReservationStation(
-            f'Mul{i + 1}', 'mul') for i in range(2)]
-        self.rs_load = [ReservationStation(
-            f'Load{i + 1}', 'load') for i in range(2)]
+        self.rs_add = [ReservationStation(f'Add{i+1}', 'add') for i in range(3)]
+        self.rs_mul = [ReservationStation(f'Mul{i+1}', 'mul') for i in range(2)]
+        self.rs_load = [ReservationStation(f'Load{i+1}', 'load') for i in range(2)]
 
     def reset(self):
         self.registers = {f'F{i}': 0.0 for i in range(8)}
@@ -123,17 +121,13 @@ class TomasuloSimulator:
             return False
 
         rs_list = self.get_rs_for_op(instr.op)
-        free_rs = None
-        for rs in rs_list:
-            if not rs.busy:
-                free_rs = rs
-                break
-
+        free_rs = next((rs for rs in rs_list if not rs.busy), None)
         if free_rs is None:
             return False
 
         free_rs.busy = True
         free_rs.op = instr.op
+        free_rs.instr_index = self.pc
         instr.issue = self.cycle
         instr.rs = free_rs.name
 
@@ -142,63 +136,52 @@ class TomasuloSimulator:
             if instr.op == 'SDF':
                 if self.register_status[instr.dest] is None:
                     free_rs.vj = self.registers[instr.dest]
-                    free_rs.qj = None
                 else:
                     free_rs.qj = self.register_status[instr.dest]
-                    free_rs.vj = None
             else:
-                self.register_status[instr.dest] = free_rs.name
+                self.register_status[instr.dest] = free_rs
         else:
             if self.register_status[instr.src1] is None:
                 free_rs.vj = self.registers[instr.src1]
-                free_rs.qj = None
             else:
                 free_rs.qj = self.register_status[instr.src1]
-                free_rs.vj = None
 
             if self.register_status[instr.src2] is None:
                 free_rs.vk = self.registers[instr.src2]
-                free_rs.qk = None
             else:
                 free_rs.qk = self.register_status[instr.src2]
-                free_rs.vk = None
 
-            self.register_status[instr.dest] = free_rs.name
+            self.register_status[instr.dest] = free_rs
 
         self.pc += 1
         return True
 
     def execute(self):
-        all_rs = self.rs_add + self.rs_mul + self.rs_load
-
-        for rs in all_rs:
+        for rs in self.rs_add + self.rs_mul + self.rs_load:
             if not rs.busy:
                 continue
+
+            instr = self.instructions[rs.instr_index]
 
             if rs.cycles_left == 0:
                 if rs.op in ['LDF', 'SDF']:
                     if rs.op == 'SDF' and rs.qj is not None:
                         continue
-                    rs.cycles_left = LATENCIAS[rs.op]
-                    for instr in self.instructions:
-                        if instr.rs == rs.name and instr.start_exec is None:
-                            instr.start_exec = self.cycle
                 else:
                     if rs.qj is not None or rs.qk is not None:
                         continue
-                    rs.cycles_left = LATENCIAS[rs.op]
-                    for instr in self.instructions:
-                        if instr.rs == rs.name and instr.start_exec is None:
-                            instr.start_exec = self.cycle
+
+                rs.cycles_left = LATENCIAS[rs.op]
+                if instr.start_exec is None:
+                    instr.start_exec = self.cycle
 
             if rs.cycles_left > 0:
                 rs.cycles_left -= 1
-
                 if rs.cycles_left == 0:
                     if rs.op == 'LDF':
                         rs.result = self.memory.get(rs.a, 0.0)
                     elif rs.op == 'SDF':
-                        pass
+                        rs.result = rs.vj
                     elif rs.op == 'ADDF':
                         rs.result = rs.vj + rs.vk
                     elif rs.op == 'SUBF':
@@ -208,44 +191,35 @@ class TomasuloSimulator:
                     elif rs.op == 'DIVF':
                         rs.result = rs.vj / rs.vk if rs.vk != 0 else 0.0
 
-                    for instr in self.instructions:
-                        if instr.rs == rs.name and instr.end_exec is None:
-                            instr.end_exec = self.cycle
+                    instr.end_exec = self.cycle
 
     def write_result(self):
-        all_rs = self.rs_add + self.rs_mul + self.rs_load
-
-        for rs in all_rs:
+        for rs in self.rs_add + self.rs_mul + self.rs_load:
             if not rs.busy:
                 continue
 
-            found_instr = None
-            for instr in self.instructions:
-                if instr.rs == rs.name and instr.end_exec is not None and instr.write_result is None:
-                    found_instr = instr
-                    break
-
-            if found_instr is None:
+            instr = self.instructions[rs.instr_index]
+            if instr.end_exec is None or instr.write_result is not None:
                 continue
 
             if rs.op == 'SDF':
-                self.memory[rs.a] = rs.vj
+                self.memory[rs.a] = rs.result
             else:
-                dest_reg = found_instr.dest
-                self.registers[dest_reg] = rs.result
-                if self.register_status[dest_reg] == rs.name:
-                    self.register_status[dest_reg] = None
+                self.registers[instr.dest] = rs.result
+                if self.register_status[instr.dest] == rs:
+                    self.register_status[instr.dest] = None
 
-            for other_rs in all_rs:
-                if other_rs.qj == rs.name:
-                    other_rs.vj = rs.result
-                    other_rs.qj = None
-                if other_rs.qk == rs.name:
-                    other_rs.vk = rs.result
-                    other_rs.qk = None
+            for other in self.rs_add + self.rs_mul + self.rs_load:
+                if other.qj == rs:
+                    other.vj = rs.result
+                    other.qj = None
+                if other.qk == rs:
+                    other.vk = rs.result
+                    other.qk = None
 
-            found_instr.write_result = self.cycle
+            instr.write_result = self.cycle
             rs.clear()
+            break
 
     def step(self):
         self.cycle += 1
@@ -258,7 +232,4 @@ class TomasuloSimulator:
     def is_finished(self):
         if self.pc < len(self.instructions):
             return False
-        for rs in self.rs_add + self.rs_mul + self.rs_load:
-            if rs.busy:
-                return False
-        return True
+        return all(not rs.busy for rs in self.rs_add + self.rs_mul + self.rs_load)
