@@ -226,6 +226,8 @@ class TomasuloSimulator:
         self.issue()
         self.execute()
         self.write_result()
+        
+        
 
     def is_finished(self):
         if self.pc < len(self.instructions):
