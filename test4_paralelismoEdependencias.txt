@@ -1,0 +1,15 @@
+; Público X – Paralelismo + dependências (F0–F7)
+
+LDF  F0, [100]
+LDF  F1, [104]
+LDF  F2, [108]
+LDF  F3, [112]
+
+ADDF F4, F0, F1
+SUBF F5, F2, F3
+
+MULF F6, F4, F5
+DIVF F7, F5, F1
+
+ADDF F4, F6, F0
+SDF  F4, [200]

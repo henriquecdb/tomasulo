@@ -249,9 +249,11 @@ class TomasuloSimulator:
 
     def step(self):
         self.cycle += 1
-        self.write_result()
-        self.execute()
         self.issue()
+        self.execute()
+        self.write_result()
+        
+        
 
     def is_finished(self):
         if self.pc < len(self.instructions):
